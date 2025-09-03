@@ -2,7 +2,14 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.AddSqliteDbContext<TodoDbContext>("db");
+builder.AddNpgsqlDbContext<TodoDbContext>("db", 
+    configureDbContextOptions: options => 
+    {
+        options.UseNpgsql(npgsqlOptions => 
+        {
+            npgsqlOptions.CommandTimeout(60);
+        });
+    });
 
 // Add service defaults & Aspire client integrations.
 builder.AddServiceDefaults();

@@ -1,36 +1,24 @@
-# === Giai đoạn 1: RESTORE ===
-# Tầng này chỉ để restore các nuget package
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS restore
+# Giai đoạn 1: Build
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
-# Copy tất cả các file .csproj và .sln
-COPY src/*.sln .
-COPY src/TodojsAspire.ApiService/*.csproj ./TodojsAspire.ApiService/
-COPY src/TodojsAspire.ServiceDefaults/*.csproj ./TodojsAspire.ServiceDefaults/
-COPY src/TodojsAspire.AppHost/*.csproj ./TodojsAspire.AppHost/
+# Copy các tệp dự án và restore dependencies trước
+# Điều này tận dụng Docker layer caching, giúp build nhanh hơn ở các lần sau
+COPY src/TodojsAspire.ApiService/TodojsAspire.ApiService.csproj ./TodojsAspire.ApiService/
+COPY src/TodojsAspire.ServiceDefaults/TodojsAspire.ServiceDefaults.csproj ./TodojsAspire.ServiceDefaults/
+RUN dotnet restore ./TodojsAspire.ApiService/TodojsAspire.ApiService.csproj
 
-# Chạy restore cho toàn bộ solution
-RUN dotnet restore
+# Copy toàn bộ source code của các project liên quan
+COPY src/TodojsAspire.ApiService/ ./TodojsAspire.ApiService/
+COPY src/TodojsAspire.ServiceDefaults/ ./TodojsAspire.ServiceDefaults/
 
-# === Giai đoạn 2: PUBLISH ===
-# Tầng này kế thừa từ tầng restore và thực hiện build/publish
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS publish
-WORKDIR /src
+# Publish ứng dụng
+WORKDIR /src/TodojsAspire.ApiService
+RUN dotnet publish -c Release -o /app/publish
 
-# Copy các thư mục obj đã được restore từ tầng trước
-COPY --from=restore /src .
-
-# Copy toàn bộ source code
-COPY src/TodojsAspire.ApiService ./TodojsAspire.ApiService
-COPY src/TodojsAspire.ServiceDefaults ./TodojsAspire.ServiceDefaults
-
-# Publish project ApiService
-RUN dotnet publish "TodojsAspire.ApiService/TodojsAspire.ApiService.csproj" -c Release -o /app/publish
-
-# === Giai đoạn 3: FINAL ===
-# Tầng cuối cùng, chỉ chứa runtime và kết quả publish, rất nhẹ
+# Giai đoạn 2: Final image, chỉ chứa runtime
 FROM mcr.microsoft.com/dotnet/aspnet:9.0
 WORKDIR /app
-COPY --from=publish /app/publish .
+COPY --from=build /app/publish .
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "TodojsAspire.ApiService.dll"]
